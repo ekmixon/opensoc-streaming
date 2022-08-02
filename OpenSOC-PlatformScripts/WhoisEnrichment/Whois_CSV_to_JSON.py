@@ -48,11 +48,9 @@ def is_field_excluded(fieldname=None):
         ['_rawText$', re.IGNORECASE],
     ]
 
-    for regex in excluded_regexes:
-        if re.search(regex[0], fieldname, regex[1]):
-            return True
-
-    return False
+    return any(
+        re.search(regex[0], fieldname, regex[1]) for regex in excluded_regexes
+    )
 
 
 def process_csv(in_filename, out_filename):
@@ -116,13 +114,13 @@ def process_files(source_dir, output_dir, max_processes=10, overwrite=False):
     :param max_processes: Maximum number of processes run
     :return:
     """
-    logging.info("Processing Whois files from %s" % source_dir)
+    logging.info(f"Processing Whois files from {source_dir}")
 
     if output_dir and not os.path.exists(output_dir):
-        logging.debug("Creating output directory %s" % output_dir)
+        logging.debug(f"Creating output directory {output_dir}")
         os.makedirs(output_dir)
 
-    logging.info("Starting %s pool workers" % max_processes)
+    logging.info(f"Starting {max_processes} pool workers")
 
     if sys.version.startswith('2.6'):
         # no maxtaskperchild in 2.6
@@ -137,14 +135,21 @@ def process_files(source_dir, output_dir, max_processes=10, overwrite=False):
                 # output files go to outputDir and are named using the last subdirectory from the dirname
                 if output_dir:
                     out_filename = filename.replace('csv', 'json')
-                    out_filename = os.path.join(output_dir, '%s_%s' % (os.path.split(dirname)[-1], out_filename))
+                    out_filename = os.path.join(
+                        output_dir,
+                        f'{os.path.split(dirname)[-1]}_{out_filename}',
+                    )
+
 
                     # if file does not exist or if overwrite is true, add file process to the pool
                     if not os.path.isfile(out_filename) or overwrite:
                         pool.apply_async(process_csv, args=(os.path.join(dirname, filename), out_filename))
                         filecount += 1
                     else:
-                        logging.info("Skipping %s, %s exists and overwrite is false" % (filename, out_filename))
+                        logging.info(
+                            f"Skipping {filename}, {out_filename} exists and overwrite is false"
+                        )
+
                 else:
                     # no outputdir so we just analyze the files
                     pool.apply_async(process_csv, args=(os.path.join(dirname, filename), None))
@@ -152,7 +157,7 @@ def process_files(source_dir, output_dir, max_processes=10, overwrite=False):
 
     try:
         pool.close()
-        logging.info("Starting activities on %s CSV files" % filecount)
+        logging.info(f"Starting activities on {filecount} CSV files")
         pool.join()
     except KeyboardInterrupt:
         logging.info("Aborting")
@@ -188,16 +193,12 @@ if __name__ == "__main__":
         logging.error("Source directory required")
         sys.exit(-1)
 
-    if not options.out_dir or options.analyze:
-        out_dir = None
-    elif not options.out_dir:
-        logging.error("Ouput directory or analysis option required")
-        sys.exit(-1)
-    else:
-        out_dir = options.out_dir
-
+    out_dir = None if not options.out_dir or options.analyze else options.out_dir
     if options.max_processes > max_cpu:
-        logging.warn('Max Processes (%s) is greater than available Processors (%s)' % (options.max_processes, max_cpu))
+        logging.warn(
+            f'Max Processes ({options.max_processes}) is greater than available Processors ({max_cpu})'
+        )
+
 
     if options.debug:
         # enable debug level and multiprocessing debugging
